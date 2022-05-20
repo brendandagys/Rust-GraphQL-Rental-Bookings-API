@@ -1,4 +1,4 @@
 /target
-postgres-data/
+db-data/
 migrations/
 *env
