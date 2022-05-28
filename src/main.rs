@@ -35,7 +35,10 @@ async fn main() -> anyhow::Result<()> {
             )
     });
 
-    println!("GraphQL server running at http://{}:{}", &host, &port);
+    println!(
+        "GraphQL server running at http://{}:{}/graphql",
+        &host, &port
+    );
 
     server.bind(format!("{}:{}", host, port))?.run().await?;
 
