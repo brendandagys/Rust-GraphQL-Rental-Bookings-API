@@ -5,12 +5,16 @@ use sqlx::{FromRow, PgPool};
 
 #[derive(SimpleObject, FromRow, Deserialize, Serialize)]
 pub struct Booking {
-    pub id: i32,
-    guest_last_name: String,
-    guest_first_name: String,
+    id: i32,
     start_timestamp: Option<DateTime<Utc>>,
     end_timestamp: Option<DateTime<Utc>>,
+    arrival_timestamp: Option<DateTime<Utc>>,
+    adult_count: i16,
+    child_count: i16,
+    towels: bool,
+
     created_at: DateTime<Utc>,
+    modified_at: Option<DateTime<Utc>>,
 }
 
 impl Booking {
@@ -32,31 +36,40 @@ impl Booking {
 
     pub async fn create(
         pool: &PgPool,
-        guest_last_name: &str,
-        guest_first_name: &str,
-        start_timestamp: Option<&str>,
-        end_timestamp: Option<&str>,
+        start_timestamp: Option<String>,
+        end_timestamp: Option<String>,
+        arrival_timestamp: Option<String>,
+        adult_count: i16,
+        child_count: i16,
+        towels: bool,
     ) -> async_graphql::Result<Booking> {
         let booking = sqlx::query_as!(
             Booking,
             "INSERT INTO bookings(
-                guest_last_name,
-                guest_first_name,
                 start_timestamp,
-                end_timestamp
+                end_timestamp,
+                arrival_timestamp,
+                adult_count,
+                child_count,
+                towels
              )
-             VALUES ($1,$2,$3,$4)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *",
-            guest_last_name,
-            guest_first_name,
             match start_timestamp {
-                Some(i) => Some(DateTime::parse_from_str(i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
+                Some(i) => Some(DateTime::parse_from_str(&i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
                 None => None,
             },
             match end_timestamp {
-                Some(i) => Some(DateTime::parse_from_str(i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
+                Some(i) => Some(DateTime::parse_from_str(&i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
                 None => None,
-            }
+            },
+            match arrival_timestamp {
+                Some(i) => Some(DateTime::parse_from_str(&i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
+                None => None,
+            },
+            adult_count,
+            child_count,
+            towels
         )
         .fetch_one(pool)
         .await?;
@@ -67,22 +80,24 @@ impl Booking {
     pub async fn update(
         pool: &PgPool,
         id: i32,
-        guest_last_name: Option<String>,
-        guest_first_name: Option<String>,
         start_timestamp: Option<String>,
         end_timestamp: Option<String>,
+        arrival_timestamp: Option<String>,
+        adult_count: Option<i16>,
+        child_count: Option<i16>,
+        towels: Option<bool>,
     ) -> async_graphql::Result<Booking> {
         let booking = sqlx::query_as!(
             Booking,
             "UPDATE bookings
-             SET guest_last_name = COALESCE($1, guest_last_name),
-                 guest_first_name = COALESCE($2, guest_first_name),
-                 start_timestamp = COALESCE($3, start_timestamp),
-                 end_timestamp = COALESCE($4, end_timestamp)
-             WHERE id = $5
+             SET start_timestamp   = COALESCE($1, start_timestamp),
+                 end_timestamp     = COALESCE($2, end_timestamp),
+                 arrival_timestamp = COALESCE($3, arrival_timestamp),
+                 adult_count       = COALESCE($4, adult_count),
+                 child_count       = COALESCE($5, child_count),
+                 towels            = COALESCE($6, towels)
+             WHERE id = $7
              RETURNING *",
-            guest_last_name,
-            guest_first_name,
             match start_timestamp {
                 Some(i) => Some(DateTime::parse_from_str(&i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
                 None => None,
@@ -91,6 +106,13 @@ impl Booking {
                 Some(i) => Some(DateTime::parse_from_str(&i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
                 None => None,
             },
+            match arrival_timestamp {
+                Some(i) => Some(DateTime::parse_from_str(&i, "%Y-%m-%d %H:%M:%S %z").unwrap()),
+                None => None,
+            },
+            adult_count,
+            child_count,
+            towels,
             id
         )
         .fetch_one(pool)
