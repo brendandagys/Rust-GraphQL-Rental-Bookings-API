@@ -1,20 +1,57 @@
-use async_graphql::SimpleObject;
+use async_graphql::{ComplexObject, Context, SimpleObject};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 
-#[derive(SimpleObject, FromRow, Deserialize, Serialize)]
-pub struct Booking {
-    id: i32,
-    start_timestamp: Option<DateTime<Utc>>,
-    end_timestamp: Option<DateTime<Utc>>,
-    arrival_timestamp: Option<DateTime<Utc>>,
-    adult_count: i16,
-    child_count: i16,
-    towels: bool,
+use super::guest::{Gender, Guest};
 
-    created_at: DateTime<Utc>,
-    modified_at: Option<DateTime<Utc>>,
+#[derive(SimpleObject, FromRow, Deserialize, Serialize)]
+#[graphql(complex)]
+pub struct Booking {
+    pub id: i32,
+    pub start_timestamp: Option<DateTime<Utc>>,
+    pub end_timestamp: Option<DateTime<Utc>>,
+    pub arrival_timestamp: Option<DateTime<Utc>>,
+    pub adult_count: i16,
+    pub child_count: i16,
+    pub towels: bool,
+
+    pub created_at: DateTime<Utc>,
+    pub modified_at: Option<DateTime<Utc>>,
+}
+
+#[ComplexObject]
+impl Booking {
+    pub async fn guests(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Guest>> {
+        let pool = ctx.data::<PgPool>()?;
+
+        let guests = sqlx::query_as!(
+            Guest,
+            r#"SELECT
+                 id,
+                 last_name,
+                 first_name,
+                 email,
+                 passport_number,
+                 country,
+                 gender as "gender: Gender",
+                 age,
+                 created_at,
+                 modified_at
+               FROM guests
+               WHERE id IN (
+                   SELECT guest_id
+                   FROM   booking_has_guests
+                   WHERE  booking_id = $1 
+               )
+            "#,
+            &self.id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(guests)
+    }
 }
 
 impl Booking {

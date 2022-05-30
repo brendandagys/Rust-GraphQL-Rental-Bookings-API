@@ -1,7 +1,9 @@
-use async_graphql::{Enum, SimpleObject};
+use async_graphql::{ComplexObject, Context, Enum, SimpleObject};
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
+
+use crate::models::booking::Booking;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Deserialize, Serialize, sqlx::Type)]
 #[sqlx(type_name = "gender")]
@@ -12,18 +14,43 @@ pub enum Gender {
 }
 
 #[derive(SimpleObject, FromRow, Deserialize, Serialize)]
+#[graphql(complex)]
 pub struct Guest {
-    id: i32,
-    last_name: String,
-    first_name: String,
-    email: String,
-    passport_number: Option<String>,
-    country: Option<String>,
-    gender: Option<Gender>,
-    age: Option<i16>,
+    pub id: i32,
+    pub last_name: String,
+    pub first_name: String,
+    pub email: String,
+    pub passport_number: Option<String>,
+    pub country: Option<String>,
+    pub gender: Option<Gender>,
+    pub age: Option<i16>,
 
-    created_at: DateTime<Utc>,
-    modified_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: Option<DateTime<Utc>>,
+}
+
+#[ComplexObject]
+impl Guest {
+    pub async fn bookings(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Booking>> {
+        let pool = ctx.data::<PgPool>()?;
+
+        let bookings = sqlx::query_as!(
+            Booking,
+            r#"SELECT *
+               FROM bookings
+               WHERE id IN (
+                   SELECT booking_id
+                   FROM   booking_has_guests
+                   WHERE  guest_id = $1
+               )
+            "#,
+            &self.id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(bookings)
+    }
 }
 
 impl Guest {
